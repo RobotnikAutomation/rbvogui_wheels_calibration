@@ -104,6 +104,7 @@ class CalibrationNode:
             self.target_found = False
         else:
             rospy.loginfo('File ' + self.file_name + ' modified. New values for ' + self.env_var + ': ' + str(self.mean))
+            rospy.logwarn('Values should be around 2.5. If not, check that the wheels are straightforward')
 
 def main():
     rospy.init_node('calibration_node')
