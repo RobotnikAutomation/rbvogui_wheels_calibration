@@ -2,6 +2,21 @@
 
 Node created to calibrate the wheels and write the mean values in the corresponding .env file.
 
+## Installation
+```
+cd && cd catkin_ws
+```
+```
+git clone https://github.com/RobotnikAutomation/rbvogui_wheels_calibration.git
+```
+```
+catkin build rbvogui_wheels_calibration
+```
+```
+source devel/setup.bash
+```
+
+## Calibration
 To calibrate the wheels once, run:
 ```
 roslaunch rbvogui_wheels_calibration wheel_calibration.launch calibrate_once:=true
