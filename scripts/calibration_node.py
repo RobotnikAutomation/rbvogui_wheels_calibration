@@ -16,16 +16,19 @@ class CalibrationNode:
         self.len_unknown = True
         self.init_time = rospy.get_rostime()
         self.file_name = 'robot_params.env'
-        self.file_path = '/home/robot/robot_params/'
+        self.file_path = '/home/robot/robot_params'
         self.env_var = 'ROBOT_JOINT_POTENTIOMETER_VOLTAGE_CALIBRATION'
         self.topic_sub = '/robot/robotnik_base_hw/io'
         self.subscriber = rospy.Subscriber(self.topic_sub, inputs_outputs, self.ioCallback)
         self.service = rospy.Service('calibrate_wheels', Trigger, self.calibrationSrv)
-
+        self.target_found = False
         self.getParams()
 
     def __call__(self):
         if self.start_calibration or self.calibrate_once:
+            file_exists = self.checkFile()
+            if not file_exists:
+                return
             rospy.sleep(self.calibration_duration)
             self.start_calibration = False
             self.computeMean(self.values)
@@ -39,6 +42,15 @@ class CalibrationNode:
         self.topic_sub = rospy.get_param('~topic_sub', self.topic_sub)
         self.calibration_duration = rospy.get_param('~calibration_duration', self.calibration_duration)
         self.calibrate_once = rospy.get_param('~calibrate_once', self.calibrate_once)
+
+    def checkFile(self):
+        try:
+            for line in fileinput.input(self.file_path + '/' + self.file_name, inplace=True):
+                print(line, end='')
+        except:
+            rospy.logerr('File not found. Either file path: "' + self.file_path + '" or file name: "' + self.file_name + '" are wrong')
+            return False
+        return True
 
     def ioCallback(self, data):
         if self.len_unknown:
@@ -75,14 +87,19 @@ class CalibrationNode:
 
     def storeValues(self):
         target_line = 'export ' + self.env_var
-        for line in fileinput.FileInput(self.file_path + '/' + self.file_name, inplace=True):
+        for line in fileinput.input(self.file_path + '/' + self.file_name, inplace=True):
             if line.startswith(target_line):
+                self.target_found = True
                 l = self.createLine()
                 print(l, end='\n')
             else:
                 print(line, end='')
         fileinput.close()
-        rospy.loginfo('File ' + self.file_name + ' modified. New values for ' + self.env_var + ': ' + str(self.mean))
+        if not self.target_found:
+            rospy.logerr('Environment variable ' + self.env_var + ' not found in file ' + self.file_name)
+            self.target_found = False
+        else:
+            rospy.loginfo('File ' + self.file_name + ' modified. New values for ' + self.env_var + ': ' + str(self.mean))
 
 def main():
     rospy.init_node('calibration_node')
