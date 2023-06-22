@@ -33,6 +33,7 @@ class CalibrationNode:
             rospy.sleep(self.calibration_duration)
             self.start_calibration = False
             self.computeMean(self.values)
+            print(self.mean)
             if self.mean == []:
                 rospy.logerr('The mean does not have any values. Check that the topic used is running or is the correct one')
                 return
