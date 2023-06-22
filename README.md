@@ -21,6 +21,6 @@ To apply the changes, the software should be restarted.
 - **file_name**: Name of the .env file (default: robot_params.env)
 - **file_path**: Path to the file (default: /home/robot/robot_params)
 - **env_var**: Name of the environment variable to modify (default: ROBOT_JOINT_POTENTIOMETER_VOLTAGE_CALIBRATION)
-- **topic_sub**: Topic needed to get the analog_inputs from the wheels (default: robotnik_base_hw/io)
+- **topic_sub**: Topic needed to get the analog_inputs from the wheels (default: robot/robotnik_base_hw/io)
 - **calibration_duration**: Time the node is saving data beforte computing the mean (default: 30)
 - **calibrate_once**: Boolean variable used to calibrate only once and then let the node die (default: false)
