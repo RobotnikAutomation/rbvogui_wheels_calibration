@@ -19,10 +19,11 @@ class CalibrationNode:
         self.file_path = '/home/robot/robot_params'
         self.env_var = 'ROBOT_JOINT_POTENTIOMETER_VOLTAGE_CALIBRATION'
         self.topic_sub = '/robot/robotnik_base_hw/io'
-        self.subscriber = rospy.Subscriber(self.topic_sub, inputs_outputs, self.ioCallback)
-        self.service = rospy.Service('calibrate_wheels', Trigger, self.calibrationSrv)
         self.target_found = False
         self.getParams()
+
+        self.subscriber = rospy.Subscriber(self.topic_sub, inputs_outputs, self.ioCallback)
+        self.service = rospy.Service('calibrate_wheels', Trigger, self.calibrationSrv)
 
     def __call__(self):
         if self.start_calibration or self.calibrate_once:
@@ -32,6 +33,9 @@ class CalibrationNode:
             rospy.sleep(self.calibration_duration)
             self.start_calibration = False
             self.computeMean(self.values)
+            if self.mean == []:
+                rospy.logerr('The mean does not have any values. Check that the topic used is running or is the correct one')
+                return
             rospy.loginfo('Mean values obtained. Writing in file ' + self.file_name)
             self.storeValues()
     
