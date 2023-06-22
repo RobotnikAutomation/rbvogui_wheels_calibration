@@ -7,7 +7,7 @@
     <arg name="calibration_duration" default="30"/>
     <arg name="calibrate_once" default="false"/>
 
-    <node name="wheel_calibrator" pkg="robotnik_wheels_calibration" type="calibration_node.py" output="screen">
+    <node name="wheel_calibration" pkg="rbvogui_wheels_calibration" type="calibration_node.py" output="screen">
         <param name="file_name" value="$(arg file_name)"/>
         <param name="file_path" value="$(arg file_path)"/>
         <param name="env_var" value="$(arg env_var)"/>
