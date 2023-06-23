@@ -4,7 +4,7 @@ Node created to calibrate the wheels and write the mean values in the correspond
 
 ## Installation
 ```
-cd && cd catkin_ws
+cd && cd catkin_ws/src
 ```
 ```
 git clone https://github.com/RobotnikAutomation/rbvogui_wheels_calibration.git
@@ -13,7 +13,7 @@ git clone https://github.com/RobotnikAutomation/rbvogui_wheels_calibration.git
 catkin build rbvogui_wheels_calibration
 ```
 ```
-source devel/setup.bash
+source ../devel/setup.bash
 ```
 
 ## Calibration
