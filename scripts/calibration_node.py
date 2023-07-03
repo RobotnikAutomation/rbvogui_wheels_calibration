@@ -102,10 +102,10 @@ class CalibrationNode:
         fileinput.close()
         if not self.target_found:
             rospy.logerr('Environment variable ' + self.env_var + ' not found in file ' + self.file_name)
-            self.target_found = False
         else:
             rospy.loginfo('File ' + self.file_name + ' modified. New values for ' + self.env_var + ': ' + str(self.mean))
             rospy.logwarn('Values should be around 2.5. If not, check that the wheels are straightforward')
+        self.target_found = False
 
 def main():
     rospy.init_node('calibration_node')
