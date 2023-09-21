@@ -31,7 +31,7 @@ class CalibrationNode:
             if not file_exists:
                 return
             if self.calibrate_once:    
-            	rospy.logwarn('Starting wheel calibration once. It will takes ' + str(self.calibration_duration) + ' seconds...')
+            	rospy.logwarn('Starting wheel calibration once. It will take ' + str(self.calibration_duration) + ' seconds...')
             rospy.sleep(self.calibration_duration)
             self.start_calibration = False
             self.computeMean(self.values)
