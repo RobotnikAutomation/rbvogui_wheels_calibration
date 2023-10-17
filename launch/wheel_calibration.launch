@@ -4,8 +4,10 @@
     <arg name="file_path" default="/home/robot/robot_params"/>
     <arg name="env_var" default="ROBOT_JOINT_POTENTIOMETER_VOLTAGE_CALIBRATION"/>
     <arg name="topic_sub" default="/robot/robotnik_base_hw/io"/>
-    <arg name="calibration_duration" default="30"/>
+    <arg name="calibration_duration" default="60"/>
     <arg name="calibrate_once" default="false"/>
+    <arg name="save_to_file" default="true"/>
+    <arg name="use_median" default="false"/>
 
     <node name="wheel_calibration" pkg="rbvogui_wheels_calibration" type="calibration_node.py" output="screen">
         <param name="file_name" value="$(arg file_name)"/>
@@ -14,5 +16,7 @@
         <param name="topic_sub" value="$(arg topic_sub)"/>
         <param name="calibration_duration" value="$(arg calibration_duration)"/>
         <param name="calibrate_once" value="$(arg calibrate_once)"/>
+        <param name="save_to_file" value="$(arg save_to_file)"/>
+        <param name="use_median" value="$(arg use_median)"/>
     </node>
 </launch>
