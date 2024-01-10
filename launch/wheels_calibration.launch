@@ -9,6 +9,7 @@
     <arg name="calibrate_once" default="false"/>
     <arg name="save_to_file" default="true"/>
     <arg name="use_median" default="false"/>
+	<arg name="avoid_repeated_data" default="true"/>
 
     <node name="wheel_calibration" pkg="rbvogui_wheels_calibration" type="calibration_node.py" output="screen">
         <param name="file_name" value="$(arg file_name)"/>
@@ -19,5 +20,6 @@
         <param name="calibrate_once" value="$(arg calibrate_once)"/>
         <param name="save_to_file" value="$(arg save_to_file)"/>
         <param name="use_median" value="$(arg use_median)"/>
+		<param name="avoid_repeated_data" value="$(arg avoid_repeated_data)"/>
     </node>
 </launch>
