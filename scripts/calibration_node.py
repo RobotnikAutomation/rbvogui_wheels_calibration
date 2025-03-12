@@ -2,6 +2,7 @@
 
 import rospy
 from robotnik_msgs.msg import inputs_outputs
+from rosmon_msgs.srv import StartStop, StartStopRequest
 from std_srvs.srv import Trigger, TriggerResponse, TriggerRequest
 import fileinput
 import numpy
@@ -22,7 +23,12 @@ class CalibrationNode:
         self.file_name = 'robot_params.env'
         self.file_path = '/home/robot/robot_params'
         self.env_var = 'ROBOT_JOINT_POTENTIOMETER_VOLTAGE_CALIBRATION'
+        self.ros_param = '/robot/robotnik_base_hw/joint_potentiometer_voltage_calibration'
+        self.restart_base_hw = True
+        self.nodes_to_restart = ['robotnik_base_hw', 'controller_manager']
+        self.rosmon_node = 'bringup'
         self.topic_sub = '/robot/robotnik_base_hw/io'
+        self.namespace = 'robot'
         self.target_found = False
         self.avoid_repeated_data = True
         self.use_median = True
@@ -37,10 +43,10 @@ class CalibrationNode:
         if self.start_calibration or self.calibrate_once:
             file_exists = self.checkFile()
             if not file_exists:
-               rospy.logerr('The file %s does not exist!', self.file_path + '/' +self.file_name)
-               return
+                rospy.logerr('The file %s does not exist!', self.file_path + '/' +self.file_name)
+                return
             if self.calibrate_once:    
-            	rospy.logwarn('Starting wheel calibration once. It will takes ' + str(self.calibration_duration) + ' seconds...')
+                rospy.logwarn('Starting wheel calibration once. It will takes ' + str(self.calibration_duration) + ' seconds...')
             
             rospy.loginfo('Starting calibration for %f seconds', self.calibration_duration)
             rospy.sleep(self.calibration_duration)
@@ -56,29 +62,48 @@ class CalibrationNode:
             rospy.loginfo('Median:\t%s',str(self.median))
             rospy.loginfo('Std:\t%s',str(self.std))                        
             if self.save_to_file == True:
-            	method = ''
-            	if self.use_median == True:
-             	    method = 'median'
-             	    self.storeValues(self.median)
-            	else:
-             	    method = 'mean'
-             	    self.storeValues(self.mean)
-            	    
-            	rospy.loginfo('All values obtained. Using the ' + method + ' for writing in file ' + self.file_name)
+                method = ''
+                if self.use_median == True:
+                    method = 'median'
+                    self.storeValues(self.median)
+                else:
+                    method = 'mean'
+                    self.storeValues(self.mean)
+                    
+                rospy.loginfo('All values obtained. Using the ' + method + ' for writing in file ' + self.file_name)
             else:
-            	rospy.loginfo('All values obtained. Not being saved into file')
+                rospy.loginfo('All values obtained. Not being saved into file')
+
+            if self.restart_base_hw == True:
+                if self.use_median:
+                    self.setRosParam(self.median)
+                else:
+                    self.setRosParam(self.mean)
+                for node in self.nodes_to_restart:
+                    success, message = self.resetNodoRosmon(self.rosmon_node, node)
+                    if not success:
+                        rospy.logerr('Unable to restart controller: ' + message)
+                        break
+            else:
+                rospy.loginfo('Not restarting controller)')
+            
             self.start_calibration = False
     
     def getParams(self):
         self.file_name = rospy.get_param('~file_name', self.file_name)
         self.file_path = rospy.get_param('~file_path', self.file_path)
         self.env_var = rospy.get_param('~env_var', self.env_var)
+        self.ros_param = rospy.get_param('~ros_param', self.ros_param)
         self.topic_sub = rospy.get_param('~topic_sub', self.topic_sub)
         self.calibration_duration = rospy.get_param('~calibration_duration', self.calibration_duration)
         self.calibrate_once = rospy.get_param('~calibrate_once', self.calibrate_once)
         self.save_to_file = rospy.get_param('~save_to_file', self.save_to_file)
         self.avoid_repeated_data = rospy.get_param('~avoid_repeated_data', self.avoid_repeated_data)
         self.use_median = rospy.get_param('~use_median', self.use_median)
+        self.restart_base_hw = rospy.get_param('~restart_base_hw', self.restart_base_hw)
+        self.nodes_to_restart = rospy.get_param('~bringup_nodes_to_restart', self.nodes_to_restart)
+        self.nodes_to_restart = rospy.get_param('~rosmon_node', self.rosmon_node)
+        self.namespace = rospy.get_param('~robot_namespace', self.namespace)
         
     def checkFile(self):
         try:
@@ -138,21 +163,25 @@ class CalibrationNode:
             rospy.loginfo('computeResult: [%d] mean = %f, median = %f, std = %f (based on %d measurements)', i, self.mean[i], self.median[i], self.std[i], len(data))
 
     
-    def createLine(self,data):
-        line = 'export ' + self.env_var + '=[1.0,1.0,1.0,1.0,'
+    def createEnvVariableLine(self,data):
+        line = 'export ' + self.env_var + '=' + self.createRosParam(data)
+        return line
+
+    def createRosParam(self, data):
+        line = '[1.0,1.0,1.0,1.0,'
         for i in range(self.n):
             if i < self.n-1:
                 line = line + str(data[i]) + ','
             else:
                 line = line + str(data[i]) + ']'
         return line
-
+    
     def storeValues(self, data):
         target_line = 'export ' + self.env_var
         for line in fileinput.input(self.file_path + '/' + self.file_name, inplace=True):
             if line.startswith(target_line):
                 self.target_found = True
-                l = self.createLine(data)
+                l = self.createEnvVariableLine(data)
                 print(l, end='\n')
             else:
                 print(line, end='')
@@ -163,6 +192,30 @@ class CalibrationNode:
             rospy.loginfo('File ' + self.file_name + ' modified. New values for ' + self.env_var + ': ' + str(data))
             rospy.logwarn('Values should be around 2.5. If not, check that the wheels are straightforward')
         self.target_found = False
+    
+    def setRosParam(self, data):
+        param_string = self.createRosParam(data)
+        rospy.set_param(self.env_var, param_string)
+    
+    def resetNodoRosmon(self, rosmon, node):
+        try:
+            rosmon_service = "/" + rosmon + '/start_stop'
+            rospy.wait_for_service(rosmon_service, timeout=5.0)
+            start_stop = rospy.ServiceProxy(rosmon_service, StartStop)
+            req = StartStopRequest()
+            req.action = req.RESTART
+            req.node = node
+            req.ns = "/" + self.namespace
+            start_stop(req)
+            rospy.logwarn("Node %s restarted in the rosmon %s" % (node, rosmon))
+            return True, "Node restarted"
+        except rospy.ServiceException as e:
+            rospy.logerr("Service rosmon exception: %s" % e)
+            return False, "Service rosmon call exception: %s" % e
+        except Exception as e:
+            rospy.logerr("Service rosmon exception: %s" % e)
+            return False, "Service rosmon exception: %s" % e
+
 
 def main():
     rospy.init_node('calibration_node')
