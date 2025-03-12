@@ -11,6 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   robotnik_msgs
   rospy
   std_srvs
+  std_msgs
+  rosmon_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -105,7 +107,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES wheel_calibration
-#  CATKIN_DEPENDS robotnik_msgs rospy std_srvs
+#  CATKIN_DEPENDS robotnik_msgs rospy std_srvs std_msgs rosmon_msgs
 #  DEPENDS system_lib
 )
 
