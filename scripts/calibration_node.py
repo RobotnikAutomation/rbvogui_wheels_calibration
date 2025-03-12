@@ -25,8 +25,8 @@ class CalibrationNode:
         self.env_var = 'ROBOT_JOINT_POTENTIOMETER_VOLTAGE_CALIBRATION'
         self.ros_param = '/robot/robotnik_base_hw/joint_potentiometer_voltage_calibration'
         self.restart_base_hw = True
-        self.nodes_to_restart = ['robotnik_base_hw', 'controller_manager']
-        self.rosmon_node = 'bringup'
+        self.nodes_to_restart = ['robotnik_base_hw','controller_spawner']
+        self.rosmon_node = 'rosmon_bringup'
         self.topic_sub = '/robot/robotnik_base_hw/io'
         self.namespace = 'robot'
         self.target_found = False
@@ -80,7 +80,7 @@ class CalibrationNode:
                 else:
                     self.setRosParam(self.mean)
                 for node in self.nodes_to_restart:
-                    success, message = self.resetNodoRosmon(self.rosmon_node, node)
+                    success, message = self.resetRosmonNode(self.rosmon_node, node)
                     if not success:
                         rospy.logerr('Unable to restart controller: ' + message)
                         break
@@ -102,7 +102,7 @@ class CalibrationNode:
         self.use_median = rospy.get_param('~use_median', self.use_median)
         self.restart_base_hw = rospy.get_param('~restart_base_hw', self.restart_base_hw)
         self.nodes_to_restart = rospy.get_param('~bringup_nodes_to_restart', self.nodes_to_restart)
-        self.nodes_to_restart = rospy.get_param('~rosmon_node', self.rosmon_node)
+        self.rosmon_node = rospy.get_param('~rosmon_node', self.rosmon_node)
         self.namespace = rospy.get_param('~robot_namespace', self.namespace)
         
     def checkFile(self):
@@ -163,18 +163,21 @@ class CalibrationNode:
             rospy.loginfo('computeResult: [%d] mean = %f, median = %f, std = %f (based on %d measurements)', i, self.mean[i], self.median[i], self.std[i], len(data))
 
     
-    def createEnvVariableLine(self,data):
-        line = 'export ' + self.env_var + '=' + self.createRosParam(data)
-        return line
-
-    def createRosParam(self, data):
-        line = '[1.0,1.0,1.0,1.0,'
+    def createEnvVariableLine(self, data):
+        line = 'export ' + self.env_var + '=[1.0,1.0,1.0,1.0,'
         for i in range(self.n):
             if i < self.n-1:
                 line = line + str(data[i]) + ','
             else:
                 line = line + str(data[i]) + ']'
         return line
+
+    def createRosParam(self, data):
+        voltage_list = [1.0,1.0,1.0,1.0]
+        for i in range(self.n):
+            if i < self.n:
+                voltage_list.append(data[i].item())
+        return voltage_list
     
     def storeValues(self, data):
         target_line = 'export ' + self.env_var
@@ -194,10 +197,10 @@ class CalibrationNode:
         self.target_found = False
     
     def setRosParam(self, data):
-        param_string = self.createRosParam(data)
-        rospy.set_param(self.env_var, param_string)
+        ros_param_value = self.createRosParam(data)
+        rospy.set_param(self.ros_param, ros_param_value)
     
-    def resetNodoRosmon(self, rosmon, node):
+    def resetRosmonNode(self, rosmon, node):
         try:
             rosmon_service = "/" + rosmon + '/start_stop'
             rospy.wait_for_service(rosmon_service, timeout=5.0)

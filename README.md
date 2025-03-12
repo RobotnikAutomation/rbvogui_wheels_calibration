@@ -37,5 +37,12 @@ To apply the changes, the software should be restarted.
 - **file_path**: Path to the file (default: /home/robot/robot_params)
 - **env_var**: Name of the environment variable to modify (default: ROBOT_JOINT_POTENTIOMETER_VOLTAGE_CALIBRATION)
 - **topic_sub**: Topic needed to get the analog_inputs from the wheels (default: robot/robotnik_base_hw/io)
-- **calibration_duration**: Time the node is saving data beforte computing the mean (default: 30)
+- **calibration_duration**: Time the node is saving data beforte computing the mean (default: 60)
 - **calibrate_once**: Boolean variable used to calibrate only once and then let the node die (default: false)
+- **save_to_file**: Boolean variable used to select if the obtained values are written in the env file (default: false)
+- **use_median**: Boolean variable used to select median values for calibration (default: true). If false, it uses the mean values.
+- **restart_base_hw**: Boolean variable used to select if the hardware controller has to be restarted after calibration (default: true)
+- **bringup_nodes_to_restart**: List with the names of the nodes to be restarted if *restart_base_hw* is set (default: [robotnik_base_hw, controller_spawner])
+- **rosmon_node**: Rosmon node whose service is called to restart *bringup_nodes_to_restart* (default: rosmon_bringup)
+- **robot_namespace**: Robot namespace (default: robot)
+- **ros_param**: Name of the ros parameter to be set before restarting *bringup_nodes_to_restart* (default: /robot/robotnik_base_hw/joint_potentiometer_voltage_calibration)
