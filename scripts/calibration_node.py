@@ -4,6 +4,7 @@ import rospy
 from robotnik_msgs.msg import inputs_outputs
 from rosmon_msgs.srv import StartStop, StartStopRequest
 from std_srvs.srv import Trigger, TriggerResponse, TriggerRequest
+from std_msgs.msg import String
 import fileinput
 import numpy
 
@@ -13,7 +14,6 @@ class CalibrationNode:
         self.mean = []
         self.median = []
         self.std = []
-        self.start_calibration = False
         self.calibration_duration = 60
         self.save_to_file = False
         self.n = 0
@@ -32,62 +32,84 @@ class CalibrationNode:
         self.target_found = False
         self.avoid_repeated_data = True
         self.use_median = True
+
+        self.status = String(data = "Idle")
         
         self.getParams()
-        
+        self.file_exists = self.checkFile()
 
         self.subscriber = rospy.Subscriber(self.topic_sub, inputs_outputs, self.ioCallback)
         self.service = rospy.Service('calibrate_wheels', Trigger, self.calibrationSrv)
-
-    def __call__(self):
-        if self.start_calibration or self.calibrate_once:
-            file_exists = self.checkFile()
-            if not file_exists:
-                rospy.logerr('The file %s does not exist!', self.file_path + '/' +self.file_name)
-                return
-            if self.calibrate_once:    
-                rospy.logwarn('Starting wheel calibration once. It will takes ' + str(self.calibration_duration) + ' seconds...')
-            
-            rospy.loginfo('Starting calibration for %f seconds', self.calibration_duration)
-            rospy.sleep(self.calibration_duration)
-            
-            self.computeResult(self.values)
-            
-            
-            if self.mean == []:
-                rospy.logerr('The mean does not have any values. Check that the topic used is running or is the correct one')
-                return
-            
-            rospy.loginfo('Mean:\t%s',str(self.mean))
-            rospy.loginfo('Median:\t%s',str(self.median))
-            rospy.loginfo('Std:\t%s',str(self.std))                        
-            if self.save_to_file == True:
-                method = ''
-                if self.use_median == True:
-                    method = 'median'
-                    self.storeValues(self.median)
-                else:
-                    method = 'mean'
-                    self.storeValues(self.mean)
-                    
-                rospy.loginfo('All values obtained. Using the ' + method + ' for writing in file ' + self.file_name)
+        self.status_pub = rospy.Publisher("~status", String, queue_size=10)
+        self.init_time = rospy.get_rostime()
+        self.start_calibration = self.calibrate_once
+    
+    def calibrationProcess(self):
+        if not self.file_exists:
+            msg = 'The file %s does not exist!' % (self.file_path + '/' +self.file_name)
+            rospy.logerr(msg)
+            self.status.data = msg
+            if self.calibrate_once:
+                self.shutdown()
             else:
-                rospy.loginfo('All values obtained. Not being saved into file')
+                self.start_calibration = False
+            return
+                
+        if not (rospy.get_rostime() - self.init_time > rospy.Duration(self.calibration_duration)):
+            msg = 'Calibrating for %.2f of %d seconds' % ((rospy.get_rostime() - self.init_time).to_sec(), self.calibration_duration)
+            self.status.data = msg
+            rospy.loginfo_throttle(10, 'calibrationProcess: %s', msg)
+            return
 
-            if self.restart_base_hw == True:
-                if self.use_median:
-                    self.setRosParam(self.median)
-                else:
-                    self.setRosParam(self.mean)
-                for node in self.nodes_to_restart:
-                    success, message = self.resetRosmonNode(self.rosmon_node, node)
-                    if not success:
-                        rospy.logerr('Unable to restart controller: ' + message)
-                        break
+        self.status = String(data = "Computing results")
+        
+        self.computeResult(self.values)
+        
+        if self.mean == []:
+            rospy.logerr('The mean does not have any values. Check that the topic used is running or is the correct one')
+            if self.calibrate_once:
+                self.shutdown()
             else:
-                rospy.loginfo('Not restarting controller)')
-            
+                self.start_calibration = False
+            return
+        
+        rospy.loginfo('Mean:\t%s',str(self.mean))
+        rospy.loginfo('Median:\t%s',str(self.median))
+        rospy.loginfo('Std:\t%s',str(self.std))                        
+        if self.save_to_file == True:
+            method = ''
+            if self.use_median == True:
+                method = 'median'
+                self.storeValues(self.median)
+            else:
+                method = 'mean'
+                self.storeValues(self.mean)
+                
+            rospy.loginfo('All values obtained. Using the ' + method + ' for writing in file ' + self.file_name)
+        else:
+            rospy.loginfo('All values obtained. Not being saved into file')
+
+        if self.restart_base_hw == True:
+            if self.use_median:
+                self.setRosParam(self.median)
+            else:
+                self.setRosParam(self.mean)
+            for node in self.nodes_to_restart:
+                success, message = self.resetRosmonNode(self.rosmon_node, node)
+                if not success:
+                    rospy.logerr('Unable to restart controller: ' + message)
+                    break
+        else:
+            rospy.loginfo('Not restarting controller)')
+        
+        if self.calibrate_once:
+            self.shutdown()
+        else:
             self.start_calibration = False
+
+    def shutdown(self):
+        rospy.loginfo('Shutting down calibration_node')
+        rospy.signal_shutdown('Shutting down calibration_node')
     
     def getParams(self):
         self.file_name = rospy.get_param('~file_name', self.file_name)
@@ -119,8 +141,7 @@ class CalibrationNode:
             self.n = len(data.analog_inputs) - 4
             self.len_unknown = False
 
-        if self.start_calibration or self.calibrate_once:
-            rospy.loginfo_throttle(10, 'ioCallback: calibrating for %d seconds'%((rospy.get_rostime() - self.init_time).to_sec()))
+        if self.start_calibration:
             self.values.append(list(data.analog_inputs))
     
     def calibrationSrv(self, data):
@@ -139,11 +160,11 @@ class CalibrationNode:
         response.success = True
         response.message = 'Starting wheel calibration'
         self.init_time = rospy.get_rostime()
+        rospy.loginfo('Starting calibration for %f seconds', self.calibration_duration)
         return response
         
 
     def computeResult(self, data):
-    	
         for i in range(self.n):
             values_array = []
             previous_data = -99999.0
@@ -218,16 +239,30 @@ class CalibrationNode:
         except Exception as e:
             rospy.logerr("Service rosmon exception: %s" % e)
             return False, "Service rosmon exception: %s" % e
+        
+    def rosPublish(self):
+        self.status_pub.publish(self.status)
+
+    def run(self):
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            if self.start_calibration:
+                self.calibrationProcess()
+            else:
+                self.status.data = "Idle"
+            self.rosPublish()
+            rate.sleep()
 
 
 def main():
     rospy.init_node('calibration_node')
     calibration_node = CalibrationNode()
-    rate = rospy.Rate(10)
-    calibration_node()
-    while not rospy.is_shutdown() and not calibration_node.calibrate_once:
-        calibration_node()
-        rate.sleep()
+    calibration_node.run()
+    # rate = rospy.Rate(10)
+    # calibration_node()
+    # while not rospy.is_shutdown() and not calibration_node.calibrate_once:
+    #     calibration_node()
+    #     rate.sleep()
 
 if __name__ == "__main__":
     main()
