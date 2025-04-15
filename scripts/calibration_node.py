@@ -100,7 +100,7 @@ class CalibrationNode:
                     rospy.logerr('Unable to restart controller: ' + message)
                     break
         else:
-            rospy.loginfo('Not restarting controller)')
+            rospy.loginfo('Not restarting controller')
         
         if self.calibrate_once:
             self.shutdown()
