@@ -8,6 +8,7 @@ import numpy
 import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from robotnik_io_msgs.msg import InputsOutputs
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -40,8 +41,15 @@ class CalibrationNode(Node):
         self.getParams()
         self.file_exists = self.checkFile()
 
+        io_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=5,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
         self.subscriber = self.create_subscription(
-            InputsOutputs, self.topic_sub, self.ioCallback, 10)
+            InputsOutputs, self.topic_sub, self.ioCallback, io_qos)
         self.service = self.create_service(
             Trigger, 'calibrate_wheels', self.calibrationSrv)
         self.status_pub = self.create_publisher(String, '~/status', 10)
@@ -187,19 +195,53 @@ class CalibrationNode(Node):
             previous_data = -99999.0
             for j in range(len(data)):
                 current_data = data[j][i + 4].value
+                if numpy.isnan(current_data):
+                    continue
                 if self.avoid_repeated_data:
                     if previous_data != current_data:
                         values_array.append(current_data)
                         previous_data = current_data
                 else:
                     values_array.append(current_data)
-            self.mean.append(numpy.average(values_array))
-            self.median.append(numpy.median(values_array))
-            self.std.append(numpy.std(values_array))
+
+            mean_value = numpy.average(values_array)
+            median_value = numpy.median(values_array)
+            std_value = numpy.std(values_array)
+
+            if (
+                numpy.isnan(mean_value)
+                or numpy.isnan(median_value)
+                or numpy.isnan(std_value)
+            ):
+                self.mean = []
+                self.median = []
+                self.std = []
+                self.get_logger().error(
+                    'computeResult: NaN detected in wheel statistics. '
+                    'Discarding calibration results')
+                return
+
+            self.mean.append(mean_value)
+            self.median.append(median_value)
+            self.std.append(std_value)
+
+            if (
+                numpy.any(numpy.isnan(self.mean))
+                or numpy.any(numpy.isnan(self.median))
+                or numpy.any(numpy.isnan(self.std))
+            ):
+                self.mean = []
+                self.median = []
+                self.std = []
+                self.get_logger().error(
+                    'computeResult: NaN detected in accumulated statistics. '
+                    'Discarding calibration results')
+                return
+
             self.get_logger().info(
                 'computeResult: [%d] mean = %f, median = %f, std = %f '
                 '(based on %d measurements)' %
-                (i, self.mean[i], self.median[i], self.std[i], len(data)))
+                (i, self.mean[i], self.median[i], self.std[i], len(values_array)))
 
     def createEnvVariableLine(self, data):
         line = 'export ' + self.env_var + '="'
@@ -226,6 +268,7 @@ class CalibrationNode(Node):
             ) as temp_file:
                 temp_path = temp_file.name
 
+            self.get_logger().info('storeValues: temporary file created at ' + temp_path)
             shutil.copy2(source_path, temp_path)
 
             with open(temp_path, 'r', encoding='utf-8') as file_handle:
@@ -271,8 +314,6 @@ class CalibrationNode(Node):
                 'Failed to safely update file ' + self.file_name + ': ' + str(exc))
         finally:
             self.target_found = False
-            if temp_path and os.path.exists(temp_path):
-                os.remove(temp_path)
 
     def rosPublish(self):
         self.status_pub.publish(self.status)
